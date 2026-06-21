@@ -1,16 +1,16 @@
-# 🚨 Rescue Link – Tactical Emergency Response System
+# Rescue Link – Tactical Emergency Response System
 
 > A highly scalable, ultra-low-latency crisis management and emergency dispatch platform designed for real-time tactical response, live incident tracking, AI-assisted decision making, and automated citizen safety verification.
 
 ---
 
-## 🌐 Live Demo
+## Live Demo
 
 🔗 **Demo:** https://rescue.amyverse.in/
 
 ---
 
-# 📖 Project Overview
+# Project Overview
 
 **Rescue Link** is an advanced emergency response ecosystem built to coordinate first responders, analyze crisis situations using AI, and provide a centralized command center for real-time emergency management.
 
@@ -20,9 +20,9 @@ By combining **SpaceTimeDB**, **Mapbox**, **Google Gemini AI**, and **WhatsApp A
 
 ---
 
-# ✨ Key Features
+# Key Features
 
-## 🗺️ Live Command Center & Real-Time Tracking
+## Live Command Center & Real-Time Tracking
 
 A centralized tactical dashboard providing complete operational visibility.
 
@@ -110,7 +110,7 @@ Result:
 
 ---
 
-# 🤖 AI Dispatch Coordinator
+# AI Dispatch Coordinator
 
 Powered by **Google Gemini 2.5 Flash**.
 
@@ -118,7 +118,7 @@ The AI layer transforms raw crisis inputs into actionable tactical intelligence.
 
 ---
 
-## 🎙️ Voice Emergency Processing
+## Voice Emergency Processing
 
 Supports:
 
@@ -130,7 +130,7 @@ The AI processes incoming communication and extracts structured emergency inform
 
 ---
 
-## 📊 Tactical Data Extraction
+## Tactical Data Extraction
 
 Custom prompt engineering forces Gemini to return:
 
@@ -147,7 +147,7 @@ This allows automated downstream dispatch workflows.
 
 ---
 
-## 🧠 Strategic Resource Allocation
+## Strategic Resource Allocation
 
 AI evaluates:
 
@@ -167,7 +167,7 @@ Example:
 
 ---
 
-## 🖼️ Crisis Image Verification
+## Crisis Image Verification
 
 Supports image-based emergency validation.
 
@@ -259,7 +259,7 @@ If a user is unsafe:
 
 ---
 
-# 🏗️ Technology Stack
+# Technology Stack
 
 ## Frontend
 
@@ -325,7 +325,7 @@ Police Ambulance Fire
 
 ---
 
-# 🚀 Future Enhancements
+# Future Enhancements
 
 * Drone-assisted surveillance integration
 * Satellite imagery analysis
