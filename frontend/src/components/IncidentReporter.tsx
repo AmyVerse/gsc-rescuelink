@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useReducer } from 'spacetimedb/react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { reducers } from '../module_bindings';
-import { processIncidentWithAI, formatIncidentDescription } from '../lib/ai';
-import SOSButton from './SOSButton';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useReducer } from "spacetimedb/react";
+import { motion, AnimatePresence } from "framer-motion";
+import { reducers } from "../module_bindings";
+import { processIncidentWithAI, formatIncidentDescription } from "../lib/ai";
+import SOSButton from "./SOSButton";
 
 interface IncidentReporterProps {
   forcedLat?: number;
@@ -13,136 +13,151 @@ interface IncidentReporterProps {
   onCancel?: () => void;
 }
 
-const IncidentReporter = ({ forcedLat, forcedLng, onSuccess, onCancel }: IncidentReporterProps = {}) => {
-  const [description, setDescription] = useState('');
-  const [userLat, setUserLat] = useState(21.1458);
-  const [userLng, setUserLng] = useState(79.0882);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isAIProcessing, setIsAIProcessing] = useState(false);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const navigate = useNavigate();
+const IncidentReporter = ({
+  forcedLat,
+  forcedLng,
+  onSuccess,
+  onCancel,
+}: IncidentReporterProps = {}) => {
+  const [incidentText, setIncidentText] = useState("");
+  const [currentLat, setCurrentLat] = useState(21.1458);
+  const [currentLng, setCurrentLng] = useState(79.0882);
+  const [isSending, setIsSending] = useState(false);
+  const [isAudioRecording, setIsAudioRecording] = useState(false);
+  const [isAudioPaused, setIsAudioPaused] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioRecorder, setAudioRecorder] = useState<MediaRecorder | null>(
+    null,
+  );
+  const goToRoute = useNavigate();
 
-  const createIncident = useReducer(reducers.createIncident);
+  const dispatchIncident = useReducer(reducers.createIncident);
 
   useEffect(() => {
-    let intervalId: any;
-    if (isRecording && !isPaused) {
-      intervalId = setInterval(() => {
-        setRecordingSeconds(s => s + 1);
+    let recordingTimer: any;
+    if (isAudioRecording && !isAudioPaused) {
+      recordingTimer = setInterval(() => {
+        setAudioDuration((prevSeconds) => prevSeconds + 1);
       }, 1000);
     }
-    return () => clearInterval(intervalId);
-  }, [isRecording, isPaused]);
+    return () => clearInterval(recordingTimer);
+  }, [isAudioRecording, isAudioPaused]);
 
   useEffect(() => {
     if (forcedLat !== undefined && forcedLng !== undefined) {
-      setUserLat(forcedLat);
-      setUserLng(forcedLng);
+      setCurrentLat(forcedLat);
+      setCurrentLng(forcedLng);
       return;
     }
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLat(position.coords.latitude);
-          setUserLng(position.coords.longitude);
-        }
-      );
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((geoPos) => {
+        setCurrentLat(geoPos.coords.latitude);
+        setCurrentLng(geoPos.coords.longitude);
+      });
     }
   }, [forcedLat, forcedLng]);
 
-  const handleSubmit = async (overrideDescription?: string, audioBlob?: Blob) => {
-    const input = overrideDescription || description;
-    if (!input.trim() && !audioBlob) return;
+  const submitReport = async (altDescription?: string, voiceData?: Blob) => {
+    const finalText = altDescription || incidentText;
+    if (!finalText.trim() && !voiceData) return;
 
-    setIsSubmitting(true);
-    setIsAIProcessing(true);
+    setIsSending(true);
+    setIsAnalyzing(true);
 
     try {
-      let audioData = undefined;
-      if (audioBlob) {
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve) => {
-          reader.onloadend = () => {
-            const base64String = (reader.result as string).split(',')[1];
-            resolve(base64String);
+      let voicePayload: any = undefined;
+      if (voiceData) {
+        const fileReader = new FileReader();
+        const encodedAudioPromise = new Promise<string>((resolvePromise) => {
+          fileReader.onloadend = () => {
+            const encodedString = (fileReader.result as string).split(",")[1];
+            resolvePromise(encodedString);
           };
         });
-        reader.readAsDataURL(audioBlob);
-        const base64Data = await base64Promise;
-        audioData = { data: base64Data, mimeType: audioBlob.type || 'audio/webm' };
+        fileReader.readAsDataURL(voiceData);
+        const finalEncodedAudio = await encodedAudioPromise;
+        voicePayload = {
+          data: finalEncodedAudio,
+          mimeType: voiceData.type || "audio/webm",
+        };
       }
 
-      const aiResponse = await processIncidentWithAI(input.trim(), audioData);
-      const markdownDescription = formatIncidentDescription(aiResponse);
+      const processedAI = await processIncidentWithAI(
+        finalText.trim(),
+        voicePayload,
+      );
+      const formattedText = formatIncidentDescription(processedAI);
 
-      await createIncident({
-        category: aiResponse.category.toLowerCase(),
-        description: markdownDescription,
-        lat: userLat,
-        lng: userLng,
+      await dispatchIncident({
+        category: processedAI.category.toLowerCase(),
+        description: formattedText,
+        lat: currentLat,
+        lng: currentLng,
       });
 
-      fetch('https://rescuevultr.amyverse.in/api/broadcast-safety', { method: 'POST' });
+      fetch("https://rescuevultr.amyverse.in/api/broadcast-safety", {
+        method: "POST",
+      });
 
-      setDescription('');
-      setIsRecording(false);
-      setRecordingSeconds(0);
+      setIncidentText("");
+      setIsAudioRecording(false);
+      setAudioDuration(0);
 
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate('/success');
+        goToRoute("/success");
       }
-    } catch (error) {
-      console.error('Failed to report incident:', error);
+    } catch (reportError) {
+      console.error("Failed to report incident:", reportError);
     } finally {
-      setIsSubmitting(false);
-      setIsAIProcessing(false);
+      setIsSending(false);
+      setIsAnalyzing(false);
     }
   };
 
-  const toggleRecording = async () => {
-    if (!isRecording) {
+  const switchRecordingState = async () => {
+    if (!isAudioRecording) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const recorder = new MediaRecorder(stream);
-        const chunks: Blob[] = [];
+        const micStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        const newRecorder = new MediaRecorder(micStream);
+        const audioChunks: Blob[] = [];
 
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunks.push(e.data);
+        newRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) audioChunks.push(event.data);
         };
 
-        recorder.onstop = () => {
-          const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-          handleSubmit("Audio transcription...", audioBlob);
-          stream.getTracks().forEach(track => track.stop());
+        newRecorder.onstop = () => {
+          const finalAudioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          submitReport("Audio transcription...", finalAudioBlob);
+          micStream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
         };
 
-        recorder.start();
-        setMediaRecorder(recorder);
-        setIsRecording(true);
-        setIsPaused(false);
-        setRecordingSeconds(0);
-      } catch (err) {
-        alert('Microphone access is required for voice reporting.');
+        newRecorder.start();
+        setAudioRecorder(newRecorder);
+        setIsAudioRecording(true);
+        setIsAudioPaused(false);
+        setAudioDuration(0);
+      } catch (micError) {
+        alert("Microphone access is required for voice reporting.");
       }
     } else {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
+      if (audioRecorder && audioRecorder.state === "recording") {
+        audioRecorder.stop();
       }
     }
   };
 
-  const cancelRecording = () => {
-    if (mediaRecorder) {
-      mediaRecorder.stop();
-      mediaRecorder.onstop = () => { }; // Prevent triggering submission
+  const abortRecording = () => {
+    if (audioRecorder) {
+      audioRecorder.stop();
+      audioRecorder.onstop = () => {}; // Prevent triggering submission
     }
-    setIsRecording(false);
-    setRecordingSeconds(0);
+    setIsAudioRecording(false);
+    setAudioDuration(0);
   };
 
   return (
@@ -165,7 +180,7 @@ const IncidentReporter = ({ forcedLat, forcedLng, onSuccess, onCancel }: Inciden
 
       <div className="bg-white p-1 md:p-2 flex items-center gap-2 border border-espresso/20 rounded-sm relative shadow-sm">
         <AnimatePresence mode="wait">
-          {!isRecording ? (
+          {!isAudioRecording ? (
             <motion.div
               key="text-input"
               initial={{ opacity: 0, x: -10 }}
@@ -175,30 +190,35 @@ const IncidentReporter = ({ forcedLat, forcedLng, onSuccess, onCancel }: Inciden
             >
               <textarea
                 placeholder="Describe the incident..."
-                value={description}
-                onChange={(e) => {
-                  setDescription(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${e.target.scrollHeight}px`;
+                value={incidentText}
+                onChange={(eventObj) => {
+                  setIncidentText(eventObj.target.value);
+                  eventObj.target.style.height = "auto";
+                  eventObj.target.style.height = `${eventObj.target.scrollHeight}px`;
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit();
+                onKeyDown={(keyEvent) => {
+                  if (keyEvent.key === "Enter" && !keyEvent.shiftKey) {
+                    keyEvent.preventDefault();
+                    submitReport();
                   }
                 }}
                 rows={1}
-                disabled={isSubmitting}
+                disabled={isSending}
                 className="flex-1 bg-surface p-3 md:p-4 text-[14px] md:text-[15px] outline-none disabled:opacity-50 rounded-xs resize-none overflow-y-hidden min-h-[44px] md:min-h-[50px] leading-relaxed transition-all duration-200"
-                style={{ height: 'auto' }}
+                style={{ height: "auto" }}
               />
               <button
                 type="button"
-                onClick={toggleRecording}
-                disabled={isSubmitting}
+                onClick={switchRecordingState}
+                disabled={isSending}
                 className="w-[44px] h-[44px] md:w-[50px] md:h-[50px] bg-surface flex items-center justify-center shrink-0 transition-colors hover:bg-espresso/5 cursor-pointer text-espresso rounded-sm border border-espresso/10 selection:bg-espresso/20"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  width="18"
+                  height="18"
+                >
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
                   <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
                 </svg>
@@ -213,16 +233,24 @@ const IncidentReporter = ({ forcedLat, forcedLng, onSuccess, onCancel }: Inciden
               className="flex-1 bg-terracotta/5 p-3 md:p-4 flex items-center justify-between rounded-sm"
             >
               <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full bg-terracotta ${isPaused ? '' : 'animate-pulse'}`} />
+                <div
+                  className={`w-3 h-3 rounded-full bg-terracotta ${isAudioPaused ? "" : "animate-pulse"}`}
+                />
                 <span className="font-black text-[12px] md:text-[14px] text-espresso uppercase tracking-widest">
-                  {isPaused ? 'Paused' : `${recordingSeconds}s`}
+                  {isAudioPaused ? "Paused" : `${audioDuration}s`}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setIsPaused(!isPaused)} className="px-3 py-1 bg-espresso/5 hover:bg-espresso/10 text-[10px] font-black uppercase cursor-pointer rounded-xs border border-espresso/10">
-                  {isPaused ? 'Resume' : 'Pause'}
+                <button
+                  onClick={() => setIsAudioPaused(!isAudioPaused)}
+                  className="px-3 py-1 bg-espresso/5 hover:bg-espresso/10 text-[10px] font-black uppercase cursor-pointer rounded-xs border border-espresso/10"
+                >
+                  {isAudioPaused ? "Resume" : "Pause"}
                 </button>
-                <button onClick={cancelRecording} className="px-3 py-1 bg-espresso/5 hover:bg-espresso/10 text-[10px] font-black uppercase cursor-pointer text-terracotta rounded-xs border border-espresso/10">
+                <button
+                  onClick={abortRecording}
+                  className="px-3 py-1 bg-espresso/5 hover:bg-espresso/10 text-[10px] font-black uppercase cursor-pointer text-terracotta rounded-xs border border-espresso/10"
+                >
                   Cancel
                 </button>
               </div>
@@ -233,18 +261,24 @@ const IncidentReporter = ({ forcedLat, forcedLng, onSuccess, onCancel }: Inciden
 
       <button
         onClick={() => {
-          if (isRecording) {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-              mediaRecorder.stop();
+          if (isAudioRecording) {
+            if (audioRecorder && audioRecorder.state === "recording") {
+              audioRecorder.stop();
             }
           } else {
-            handleSubmit();
+            submitReport();
           }
         }}
-        disabled={isSubmitting || (!description.trim() && !isRecording)}
+        disabled={isSending || (!incidentText.trim() && !isAudioRecording)}
         className="bg-terracotta text-white py-4 md:py-5 font-black text-[12px] md:text-[14px] tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-transform disabled:cursor-not-allowed cursor-pointer rounded-sm border border-espresso/20 shadow-lg"
       >
-        {isSubmitting ? (isAIProcessing ? 'ANALYZING...' : 'REPORTING...') : (isRecording ? 'FINISH & UPLOAD' : 'REPORT INCIDENT')}
+        {isSending
+          ? isAnalyzing
+            ? "ANALYZING..."
+            : "REPORTING..."
+          : isAudioRecording
+            ? "FINISH & UPLOAD"
+            : "REPORT INCIDENT"}
       </button>
     </div>
   );
