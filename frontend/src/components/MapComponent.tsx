@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -21,6 +21,54 @@ const EMOJI: Record<string, string> = {
   default: '🚨',
 };
 
+// ── Strip markdown for plain-text preview ────────────────────────────
+const stripMarkdown = (md: string): string => {
+  return md
+    .replace(/^#{1,6}\s+/gm, '')       // headings
+    .replace(/\*\*(.*?)\*\*/g, '$1')    // bold
+    .replace(/\*(.*?)\*/g, '$1')        // italic
+    .replace(/__(.*?)__/g, '$1')        // bold alt
+    .replace(/_(.*?)_/g, '$1')          // italic alt
+    .replace(/~~(.*?)~~/g, '$1')        // strikethrough
+    .replace(/`(.*?)`/g, '$1')          // inline code
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1') // images
+    .replace(/^[-*+]\s+/gm, '')        // unordered lists
+    .replace(/^\d+\.\s+/gm, '')        // ordered lists
+    .replace(/^>\s?/gm, '')            // blockquotes
+    .replace(/---/g, '')               // horizontal rules
+    .replace(/\n{2,}/g, ' ')           // collapse newlines
+    .replace(/\n/g, ' ')               // remaining newlines
+    .trim();
+};
+
+// ── Incident category icons ──────────────────────────────────────────
+const INCIDENT_EMOJI: Record<string, string> = {
+  fire: '🔥',
+  flood: '🌊',
+  medical: '🏥',
+  security: '🛡️',
+  infrastructure: '🏗️',
+  traffic: '🚦',
+  rescue: '🆘',
+  earthquake: '🌍',
+  storm: '⛈️',
+  chemical: '☣️',
+  explosion: '💥',
+  collapse: '🏚️',
+  gas: '💨',
+  power: '⚡',
+  water: '💧',
+  accident: '🚗',
+  other: '📍',
+  default: '🚨',
+};
+
+const getIncidentEmoji = (category: string): string => {
+  const key = category.toLowerCase().trim();
+  return INCIDENT_EMOJI[key] ?? INCIDENT_EMOJI.default;
+};
+
 const MapComponent = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<mapboxgl.Map | null>(null);
@@ -33,6 +81,8 @@ const MapComponent = () => {
   const [selectedEntity, setSelectedEntity] = useState<any>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [routeInfo, setRouteInfo] = useState<{ distance: number, duration: number } | null>(null);
+  const [mapBounds, setMapBounds] = useState<mapboxgl.LngLatBounds | null>(null);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   // ── SpacetimeDB data ────────────────────────────────────────────
   const [allEntities] = useTable(tables.live_entities);
   const [allIncidents] = useTable(tables.incidents);
@@ -66,6 +116,28 @@ const MapComponent = () => {
     }).filter((s) => s.lat !== undefined && s.lng !== undefined);
   }, [allSignals, allIncidents, allEntities]);
   const activeIncidents = useMemo(() => allIncidents.filter((i: Incidents) => i.status === 'active'), [allIncidents]);
+
+  // ── Viewport-filtered incidents ─────────────────────────────────────
+  const viewportIncidents = useMemo(() => {
+    if (!mapBounds) return activeIncidents;
+    return activeIncidents.filter((incident: Incidents) => {
+      const sw = mapBounds.getSouthWest();
+      const ne = mapBounds.getNorthEast();
+      return (
+        incident.lat >= sw.lat &&
+        incident.lat <= ne.lat &&
+        incident.lng >= sw.lng &&
+        incident.lng <= ne.lng
+      );
+    });
+  }, [activeIncidents, mapBounds]);
+
+  // ── Update bounds handler ──────────────────────────────────────────
+  const updateBounds = useCallback(() => {
+    if (mapInstance.current) {
+      setMapBounds(mapInstance.current.getBounds());
+    }
+  }, []);
 
   // ── Find nearest incident utility ──────────────────────────────────
   const getNearestIncident = (lat: number, lng: number) => {
@@ -204,6 +276,10 @@ const MapComponent = () => {
         setSelectedEntity(null);
       }
     });
+
+    // Track viewport bounds for incident list
+    mapInstance.current.on('load', updateBounds);
+    mapInstance.current.on('moveend', updateBounds);
 
   }, []);
 
@@ -400,16 +476,182 @@ const MapComponent = () => {
   return (
     <>
       <div ref={mapContainer} className="w-full h-full" />
+
+      {/* ── Left-side Incident List Panel ──────────────────────────────── */}
       <AnimatePresence>
-        {isLocating && (
+        {!isPanelCollapsed && (
           <motion.div
+            initial={{ opacity: 0, x: -40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -40 }}
+            transition={{ type: 'spring', bounce: 0.15, duration: 0.5 }}
+            className="fixed top-24 left-4 w-[360px] max-h-[calc(100vh-120px)] bg-white/90 backdrop-blur-xl border border-espresso/15 shadow-2xl z-5000 flex flex-col rounded-sm overflow-hidden"
+          >
+            {/* Panel Header */}
+            <div className="bg-espresso text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />
+                <h3 className="text-[13px] font-black uppercase tracking-[.25em]">Incidents in View</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-black bg-white/15 px-2.5 py-1 rounded-xs tracking-wider">
+                  {viewportIncidents.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsPanelCollapsed(true)}
+                  className="text-white/40 hover:text-white transition-colors cursor-pointer p-0.5"
+                  title="Collapse panel"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Incident List */}
+            <div className="flex-1 overflow-y-auto">
+              {viewportIncidents.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <div className="text-3xl mb-3 opacity-30">📍</div>
+                  <p className="text-[13px] font-bold text-espresso/40 uppercase tracking-widest">No incidents in view</p>
+                  <p className="text-[12px] text-espresso/25 mt-1">Pan or zoom out to discover</p>
+                </div>
+              ) : (
+                viewportIncidents.map((incident: Incidents, index: number) => {
+                  const isSelected = selectedEntity?.type === 'incident' && selectedEntity?.id === incident.incidentId.toString();
+                  const timeSince = (() => {
+                    const now = Date.now();
+                    const created = Number(incident.createdAt);
+                    // createdAt might be seconds or ms — handle both
+                    const createdMs = created < 1e12 ? created * 1000 : created;
+                    const diffMin = Math.floor((now - createdMs) / 60000);
+                    if (diffMin < 1) return 'Just now';
+                    if (diffMin < 60) return `${diffMin}m ago`;
+                    const diffHr = Math.floor(diffMin / 60);
+                    if (diffHr < 24) return `${diffHr}h ago`;
+                    return `${Math.floor(diffHr / 24)}d ago`;
+                  })();
+
+                  return (
+                    <motion.button
+                      key={incident.incidentId.toString()}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.03 }}
+                      onClick={() => {
+                        setSelectedEntity({
+                          id: incident.incidentId.toString(),
+                          type: 'incident',
+                          subType: incident.category,
+                          status: incident.status,
+                          lat: incident.lat,
+                          lng: incident.lng,
+                          description: incident.description
+                        });
+                        mapInstance.current?.flyTo({
+                          center: [incident.lng, incident.lat],
+                          zoom: 16,
+                          duration: 1500,
+                          essential: true
+                        });
+                      }}
+                      className={`w-full text-left px-5 py-4 border-b border-espresso/5 transition-all duration-200 cursor-pointer group ${
+                        isSelected
+                          ? 'bg-espresso/8 border-l-4 border-l-terracotta'
+                          : 'hover:bg-espresso/4 border-l-4 border-l-transparent'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 mt-0.5">
+                          <div className={`w-9 h-9 rounded-xs flex items-center justify-center text-base ${
+                            isSelected ? 'bg-terracotta/15 text-terracotta' : 'bg-espresso/5 group-hover:bg-espresso/10'
+                          }`}>
+                            {getIncidentEmoji(incident.category)}
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-[13px] font-black text-espresso uppercase tracking-wide truncate">
+                              {incident.category}
+                            </span>
+                            <span className="text-[11px] font-bold text-espresso/30 uppercase tracking-wider flex-shrink-0">
+                              {timeSince}
+                            </span>
+                          </div>
+                          <p className="text-[13px] text-espresso/50 leading-relaxed line-clamp-2">
+                            {incident.description ? stripMarkdown(incident.description) : 'No description available'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className={`w-1.5 h-1.5 rounded-full ${
+                              incident.status === 'active' ? 'bg-red-500 animate-pulse' : 'bg-espresso/20'
+                            }`} />
+                            <span className="text-[11px] font-bold text-espresso/30 uppercase tracking-widest">
+                              {incident.status}
+                            </span>
+                            <span className="text-[11px] text-espresso/20">•</span>
+                            <span className="text-[11px] font-mono text-espresso/25">
+                              {incident.lat.toFixed(4)}, {incident.lng.toFixed(4)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-espresso/30">
+                            <path d="M9 18l6-6-6-6" />
+                          </svg>
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Panel Footer */}
+            {viewportIncidents.length > 0 && (
+              <div className="px-5 py-3 border-t border-espresso/8 bg-espresso/3">
+                <p className="text-[11px] font-bold text-espresso/30 uppercase tracking-widest text-center">
+                  {viewportIncidents.length} of {activeIncidents.length} total incidents
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Collapsed panel toggle button ──────────────────────────────── */}
+      <AnimatePresence>
+        {isPanelCollapsed && (
+          <motion.button
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="fixed top-24 left-10 bg-white p-5 pr-8 border-l-8 border-espresso border-y border-r shadow-2xl flex items-center gap-4 z-5000"
+            onClick={() => setIsPanelCollapsed(false)}
+            className="fixed top-24 left-4 bg-espresso text-white px-3 py-3 z-5000 rounded-sm shadow-xl cursor-pointer hover:bg-espresso/90 transition-colors flex items-center gap-2"
+            title="Show incident list"
           >
-            <div className="w-3 h-3 bg-terracotta rounded-full animate-pulse" />
-            <span className="text-[14px] font-black text-espresso tracking-widest uppercase">Locating you...</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+            <span className="text-[10px] font-black uppercase tracking-widest">{viewportIncidents.length}</span>
+            <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isLocating && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-0 flex items-center justify-center z-5000 pointer-events-none"
+          >
+            <div className="bg-white/95 backdrop-blur-xl px-10 py-6 rounded-sm border border-espresso/15 shadow-2xl flex items-center gap-4 pointer-events-auto">
+              <div className="w-4 h-4 bg-terracotta rounded-full animate-pulse" />
+              <span className="text-[16px] font-black text-espresso tracking-widest uppercase">Locating you...</span>
+            </div>
           </motion.div>
         )}
 

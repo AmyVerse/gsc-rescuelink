@@ -24,7 +24,7 @@ const Navigation = () => {
 
   return (
     <header className="fixed top-0 w-full flex justify-center py-4 md:py-8 z-2000">
-      <nav className="bg-surface p-1 flex relative border border-espresso/20 rounded-sm mx-4 md:mx-0 shadow-sm">
+      <nav className="bg-surface p-1 flex items-center relative border border-espresso/20 rounded-sm mx-4 md:mx-0 shadow-sm">
         <LayoutGroup>
           {items.map((item) => {
             const isActive = location.pathname === item.path;
@@ -63,6 +63,9 @@ const Navigation = () => {
             );
           })}
         </LayoutGroup>
+        <div className="ml-1 hidden md:block">
+          <SOSButton isFixed={false} className="w-[80px] md:w-[100px] h-[32px] md:h-[40px] !border-2 !rounded-xs" />
+        </div>
       </nav>
     </header>
   );
@@ -75,9 +78,6 @@ const AppContent = () => {
   return (
     <div className="w-screen h-screen">
       <Navigation />
-      <div className="hidden md:block">
-        <SOSButton isFixed={true} />
-      </div>
       <main className="relative w-full h-full pt-[80px] md:pt-[100px] z-50">
         <div className={`fixed inset-0 z-10 transition-opacity duration-300 ${isMapRoute ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
           <MapComponent />
