@@ -11,6 +11,7 @@ const EMOJI: Record<string, string> = {
   police: '🚔',
   volunteer: '🙋',
   rescue: '🆘',
+  barrier: '🚧',
   default: '🚨',
 }
 
@@ -110,6 +111,7 @@ export default function GodModeMarkers() {
   const activeIncidents = useMemo(() => allIncidents.filter((i: Incidents) => i.status === 'active'), [allIncidents])
   const distressMarkers = useMemo(() => allEntities.filter((e: LiveEntities) => e.type === 'distress'), [allEntities])
   const responders = useMemo(() => allEntities.filter((e: LiveEntities) => e.type === 'responder'), [allEntities])
+  const barriers = useMemo(() => allEntities.filter((e: LiveEntities) => e.type === 'barrier'), [allEntities])
 
   const godModeMoveEntity = useReducer(reducers.godModeMoveEntity)
   const godModeDeleteEntity = useReducer(reducers.godModeDeleteEntity)
@@ -190,6 +192,15 @@ export default function GodModeMarkers() {
       {/* SOS distress signals removed */}
 
       {responders.map((e: LiveEntities) => (
+        <ResponderMarker
+          key={e.id.toHexString()}
+          entity={e}
+          onDrag={handleDrag}
+          onDelete={handleDeleteEntity}
+        />
+      ))}
+
+      {barriers.map((e: LiveEntities) => (
         <ResponderMarker
           key={e.id.toHexString()}
           entity={e}

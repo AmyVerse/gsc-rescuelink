@@ -18,6 +18,7 @@ export default function GodModeControls({ connected, placementMode, setPlacement
 
   const activeIncidents = allIncidents.filter((i: Incidents) => i.status === 'active')
   const responders      = allEntities.filter((e: LiveEntities) => e.type === 'responder')
+  const barriers        = allEntities.filter((e: LiveEntities) => e.type === 'barrier')
   const pendingSOS      = allSignals.filter((s: DistressSignals) => s.status === 'pending')
 
   return (
@@ -40,6 +41,7 @@ export default function GodModeControls({ connected, placementMode, setPlacement
           <StatBadge label="Incidents"    value={activeIncidents.length} />
           <StatBadge label="Responders"   value={responders.length} />
           <StatBadge label="Pending SOS"  value={pendingSOS.length} />
+          <StatBadge label="Barriers"     value={barriers.length} />
           <StatBadge label="All Entities" value={allEntities.length} />
         </div>
       </div>
@@ -56,6 +58,11 @@ export default function GodModeControls({ connected, placementMode, setPlacement
           <ModeButton mode="firetruck" currentMode={placementMode} onClick={() => setPlacementMode(placementMode === 'firetruck' ? 'none' : 'firetruck')} label="🚒 Deploy Firetruck" />
           <ModeButton mode="police" currentMode={placementMode} onClick={() => setPlacementMode(placementMode === 'police' ? 'none' : 'police')} label="🚔 Deploy Police Unit" />
           <ModeButton mode="volunteer" currentMode={placementMode} onClick={() => setPlacementMode(placementMode === 'volunteer' ? 'none' : 'volunteer')} label="🙋 Deploy Volunteer" />
+        </div>
+
+        <h2 className="font-black text-xs text-[#553a34]/60 uppercase tracking-[0.2em] mb-4 mt-6">Road Controls</h2>
+        <div className="flex flex-col gap-2">
+          <ModeButton mode="barrier" currentMode={placementMode} onClick={() => setPlacementMode(placementMode === 'barrier' ? 'none' : 'barrier')} label="🚧 Place Barrier" />
         </div>
 
         <div className="text-[10px] font-bold text-[#553a34]/40 uppercase tracking-[0.15em] text-center mt-6 pt-6 border-t border-[#dac2b6]/30">

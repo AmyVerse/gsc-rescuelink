@@ -22,6 +22,17 @@ export default function GodModeInteractions({ placementMode, onPlaced, onInciden
       if (placementMode === 'incident') {
         if (onIncidentClick) onIncidentClick(lat, lng)
         return // do not call onPlaced yet
+      } else if (placementMode === 'barrier') {
+        const randomHex = Array.from({ length: 64 })
+          .map(() => Math.floor(Math.random() * 16).toString(16))
+          .join('')
+        godModeMoveEntity({
+          targetId: Identity.fromString(randomHex),
+          lat,
+          lng,
+          type: 'barrier',
+          subType: 'roadblock'
+        })
       } else {
         // Place a responder
         // Generate a random ID for the new responder

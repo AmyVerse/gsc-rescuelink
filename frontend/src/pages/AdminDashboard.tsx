@@ -18,6 +18,7 @@ const EMOJI: Record<string, string> = {
   police: '🚔',
   volunteer: '🙋',
   rescue: '🆘',
+  barrier: '🚧',
   default: '🚨',
 };
 
@@ -74,6 +75,10 @@ export default function AdminDashboard() {
     () => allEntities.filter((e: LiveEntities) => e.type === 'responder'),
     [allEntities]
   );
+  const barriers = useMemo(
+    () => allEntities.filter((e: LiveEntities) => e.type === 'barrier'),
+    [allEntities]
+  );
   
   const incidents = useMemo(
     () => [...allIncidents].sort((a: Incidents, b: Incidents) => Number(b.createdAt - a.createdAt)),
@@ -100,8 +105,8 @@ export default function AdminDashboard() {
         targetId: Identity.fromString(randomHex),
         lat,
         lng,
-        type: 'responder',
-        subType: placementMode
+        type: placementMode === 'barrier' ? 'barrier' : 'responder',
+        subType: placementMode === 'barrier' ? 'roadblock' : placementMode
       });
       setPlacementMode('none');
     }
@@ -224,7 +229,7 @@ export default function AdminDashboard() {
           <div className="p-5 bg-[#ffffff] sticky top-0 z-10 border-b border-[#dac2b6]/40 shadow-sm">
             <h2 className="font-black text-xs text-[#553a34]/60 uppercase tracking-[0.2em] mb-3">Available Responders ({responders.length})</h2>
             <div className="flex flex-wrap gap-2">
-              {['ambulance', 'firetruck', 'police', 'volunteer'].map(sub => (
+              {['ambulance', 'firetruck', 'police', 'volunteer', 'barrier'].map(sub => (
                 <button
                   key={sub}
                   onClick={() => setPlacementMode(placementMode === sub ? 'none' : sub)}
@@ -492,6 +497,22 @@ export default function AdminDashboard() {
                   />
                 )}
               </div>
+            );
+          })}
+
+          {/* Render Barriers */}
+          {barriers.map((b: LiveEntities) => {
+            const icon = L.divIcon({
+              className: 'barrier-icon',
+              html: `<div style="display:flex; justify-content:center; align-items:center; width:36px; height:36px; border-radius:50%; background:rgba(239,68,68,0.2); border:2px solid #ef4444;"><span style="font-size:24px;" role="img" aria-label="barrier">🚧</span></div>`,
+              iconSize: [36, 36],
+              iconAnchor: [18, 18],
+            });
+
+            return (
+              <Marker key={`barrier-${b.entityNumber.toString()}`} position={[b.lat, b.lng]} icon={icon}>
+                <Popup><div className="font-bold text-[#ef4444] uppercase text-xs tracking-widest">Road Barrier</div></Popup>
+              </Marker>
             );
           })}
         </MapContainer>

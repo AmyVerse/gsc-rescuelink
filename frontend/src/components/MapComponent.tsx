@@ -18,6 +18,7 @@ const EMOJI: Record<string, string> = {
   police: '🚔',
   volunteer: '🙋',
   rescue: '🆘',
+  barrier: '🚧',
   default: '🚨',
 };
 
@@ -60,6 +61,7 @@ const INCIDENT_EMOJI: Record<string, string> = {
   power: '⚡',
   water: '💧',
   accident: '🚗',
+  barrier: '🚧',
   other: '📍',
   default: '🚨',
 };
@@ -91,6 +93,7 @@ const MapComponent = () => {
 
   // ── Derived data ────────────────────────────────────────────────
   const responders = useMemo(() => allEntities.filter((e: LiveEntities) => e.type === 'responder'), [allEntities]);
+  const barriers = useMemo(() => allEntities.filter((e: LiveEntities) => e.type === 'barrier'), [allEntities]);
   const distressSignals = useMemo(() => {
     const incidentById = new Map<number, Incidents>();
     allIncidents.forEach((incident) => {
@@ -155,10 +158,13 @@ const MapComponent = () => {
   };
 
   // ── Fetch route from Mapbox ────────────────────────────────────────
-  const fetchRoute = async (start: [number, number], end: [number, number]) => {
+  const fetchRoute = async (start: [number, number], end: [number, number], barriersList: LiveEntities[]) => {
     try {
+      const avoidCoords = barriersList.map(b => `point(${b.lng} ${b.lat})`).join(',');
+      const excludeParam = avoidCoords ? `&exclude=${avoidCoords}` : '';
+      
       const query = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`,
+        `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}${excludeParam}`,
         { method: 'GET' }
       );
       const json = await query.json();
@@ -210,7 +216,7 @@ const MapComponent = () => {
     if (selectedEntity && (selectedEntity.type === 'responder' || selectedEntity.type === 'distress')) {
       const nearest = getNearestIncident(selectedEntity.lat, selectedEntity.lng);
       if (nearest) {
-        fetchRoute([selectedEntity.lng, selectedEntity.lat], [nearest.lng, nearest.lat])
+        fetchRoute([selectedEntity.lng, selectedEntity.lat], [nearest.lng, nearest.lat], barriers)
           .then(info => setRouteInfo(info));
       } else {
         setRouteInfo(null);
@@ -224,7 +230,7 @@ const MapComponent = () => {
         mapInstance.current.removeSource('route');
       }
     }
-  }, [selectedEntity]);
+  }, [selectedEntity, barriers]);
 
   useEffect(() => {
     if (mapInstance.current || !mapContainer.current) return;
@@ -325,6 +331,24 @@ const MapComponent = () => {
     });
     return () => { markers.forEach(marker => marker.remove()); };
   }, [responders]);
+
+  useEffect(() => {
+    if (!mapInstance.current) return;
+    const markers: mapboxgl.Marker[] = [];
+    barriers.forEach((entity: LiveEntities) => {
+      const el = document.createElement('div');
+      el.className = 'relative flex items-center justify-center';
+      el.innerHTML = `
+        <div class="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-75"></div>
+        <div class="relative z-10 w-12 h-12 flex items-center justify-center text-3xl drop-shadow-md">
+          ${EMOJI.barrier}
+        </div>
+      `;
+      const marker = new mapboxgl.Marker(el).setLngLat([entity.lng, entity.lat]).addTo(mapInstance.current!);
+      markers.push(marker);
+    });
+    return () => { markers.forEach(marker => marker.remove()); };
+  }, [barriers]);
 
   // ── Draw destination line when an entity is selected ─────────────────
   useEffect(() => {

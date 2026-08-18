@@ -9,7 +9,7 @@ import IncidentReporter from '../IncidentReporter'
 const MAP_CENTER: [number, number] = [21.1458, 79.0882]
 const MAP_ZOOM = 13
 
-export type PlacementMode = 'none' | 'incident' | 'ambulance' | 'firetruck' | 'police' | 'volunteer'
+export type PlacementMode = 'none' | 'incident' | 'ambulance' | 'firetruck' | 'police' | 'volunteer' | 'barrier'
 
 export default function GodModeContainer() {
   const { isActive: connected } = useSpacetimeDB()
